@@ -1,0 +1,30 @@
+*&---------------------------------------------------------------------*
+*& Report ZSD_CM_CL_APP_LOG
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZSD_CM_CL_APP_LOG.
+
+SELECTION-SCREEN BEGIN OF BLOCK BLOCK02 WITH FRAME TITLE TEXT-002.
+
+PARAMETERS : P_CONT   TYPE VEDA-VBELN,  "contract number
+             P_VKORG  TYPE VBAK-VKORG,  " sales org.
+             P_VTWEG  TYPE VBAK-VTWEG,  "distribution channel
+             P_SPART  TYPE VBAK-SPART,  "division
+             P_ST_DAT TYPE VEDA-VBEGDAT,  "contract start date
+             P_EN_DAT TYPE VEDA-VENDDAT.  "contract end date
+
+SELECTION-SCREEN END OF BLOCK BLOCK02.
+
+
+START-OF-SELECTION.
+
+data(obj1) = new  ZCL_APP_LOG_TEST( imp_cont = p_cont
+                                    imp_vkorg = p_vkorg
+                                     imp_vtweg = p_vtweg
+                                     imp_spart = p_spart
+                                     imp_st_dat = p_st_dat
+                                     imp_en_dat = p_en_dat ).
+
+call METHOD : obj1->process_data( ),
+              obj1->display_data( ).

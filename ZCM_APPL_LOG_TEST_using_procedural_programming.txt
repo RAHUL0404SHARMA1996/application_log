@@ -1,0 +1,452 @@
+*&---------------------------------------------------------------------*
+*& Report ZCM_APPL_LOG_TEST
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZCM_APPL_LOG_TEST.
+
+*types : BEGIN OF ty_final,
+*          type
+
+TYPES : BEGIN OF TY_ERROR,
+          SNO         TYPE I,
+          TYPE        TYPE CHAR4,
+          STATUS(100) TYPE C,
+          CONT_NUMBER TYPE VBELN_VA,
+          APP_LOG     TYPE CHAR100,
+        END OF TY_ERROR.
+
+DATA : WA_ERROR TYPE TY_ERROR,
+       IT_ERROR TYPE TABLE OF TY_ERROR.
+DATA : GV_COUNT   TYPE I,
+       LV_MESSAGE TYPE CHAR100.
+
+CONSTANTS : GC_OBJECT     TYPE BALHDR-OBJECT VALUE 'ZTEST',
+            GC_SUB_OBJECT TYPE BALHDR-SUBOBJECT VALUE 'ZTEST1',
+            GC_X          TYPE CHAR1 VALUE 'X',
+            GC_U          TYPE CHAR1 VALUE 'U',
+            GC_ITEM       TYPE POSNR_VA VALUE '000000',
+            GC_EA         TYPE CHAR2 VALUE 'EA'.
+
+
+DATA : GT_RETURN    TYPE TABLE OF  BAPIRET2,
+       GV_ERROR     TYPE CHAR1,
+       GV_EXTNUMBER TYPE BALNREXT,
+       GT_PROT      TYPE BAL_T_LOGH.
+
+SELECTION-SCREEN BEGIN OF BLOCK BLOCK02 WITH FRAME TITLE TEXT-002.
+
+PARAMETERS : P_CONT   TYPE VEDA-VBELN,
+             P_VKORG  TYPE VBAK-VKORG,
+             P_VTWEG  TYPE VBAK-VTWEG,
+             P_SPART  TYPE VBAK-SPART,
+             P_ST_DAT TYPE VEDA-VBEGDAT,
+             P_EN_DAT TYPE VEDA-VENDDAT.
+
+SELECTION-SCREEN END OF BLOCK BLOCK02.
+
+
+START-OF-SELECTION.
+
+  PERFORM F_BAPI_CUSTOMERCONTRACT_CHANGE.
+*perform f_field_cat.
+  PERFORM F_DISPLAY_OUTPUT.
+
+*
+
+*&---------------------------------------------------------------------*
+*&      Form  F_BAPI_CUSTOMERCONTRACT_CHANGE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM F_BAPI_CUSTOMERCONTRACT_CHANGE .
+
+  DATA : LS_CONTRACT  TYPE BAPISDH1,
+         LS_CONTRACTX TYPE BAPISDH1X,
+         LS_DATA      TYPE BAPICTR,
+         LT_DATA      TYPE TABLE OF BAPICTR,
+         LS_DATAX     TYPE BAPICTRX,
+         LT_DATAX     TYPE TABLE OF BAPICTRX.
+
+  LS_CONTRACT-COLLECT_NO = P_CONT.
+  LS_CONTRACT-SALES_ORG = P_VKORG.
+  LS_CONTRACT-DISTR_CHAN = P_VTWEG.
+  LS_CONTRACT-DIVISION = P_SPART.
+
+  LS_CONTRACTX-UPDATEFLAG = GC_U.
+  LS_CONTRACTX-COLLECT_NO = GC_X.
+  LS_CONTRACTX-SALES_ORG = GC_X.
+  LS_CONTRACTX-DISTR_CHAN = GC_X.
+  LS_CONTRACTX-DIVISION = GC_X.
+
+  LS_DATA-ITM_NUMBER = GC_ITEM.
+  LS_DATA-CON_ST_DAT = P_ST_DAT.
+  LS_DATA-CON_EN_DAT = P_EN_DAT.
+  APPEND LS_DATA TO LT_DATA.
+  CLEAR LS_DATA.
+
+  LS_DATAX-ITM_NUMBER = GC_ITEM.
+  LS_DATAX-CON_ST_DAT = P_ST_DAT.
+  LS_DATAX-CON_EN_DAT = P_EN_DAT.
+  APPEND LS_DATAX TO LT_DATAX.
+  CLEAR LS_DATAX.
+
+  CALL FUNCTION 'BAPI_CUSTOMERCONTRACT_CHANGE'
+    EXPORTING
+      SALESDOCUMENT       = P_CONT
+      CONTRACT_HEADER_IN  = LS_CONTRACT
+      CONTRACT_HEADER_INX = LS_CONTRACTX
+    TABLES
+      RETURN              = GT_RETURN
+      CONTRACT_DATA_IN    = LT_DATA
+      CONTRACT_DATA_INX   = LT_DATAX.
+
+
+
+  LOOP AT GT_RETURN INTO DATA(GS_RETURN).
+    CONCATENATE 'CONT_Upload' SY-DATUM '_' SY-UZEIT '_' INTO GV_EXTNUMBER.
+    IF GS_RETURN-TYPE CA GC_EA.
+
+      ADD 1 TO GV_COUNT.
+      LV_MESSAGE = |{ P_CONT } { GS_RETURN-MESSAGE } |.
+      WA_ERROR-SNO = GV_COUNT.
+      WA_ERROR-TYPE = '@02@'."'@0A@'.
+      WA_ERROR-STATUS = LV_MESSAGE.
+      WA_ERROR-APP_LOG = GV_EXTNUMBER.
+      WA_ERROR-CONT_NUMBER = P_CONT.
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'
+*         IMPORTING
+*           RETURN        =
+        .
+
+    ELSE.
+      ADD 1 TO GV_COUNT.
+      LV_MESSAGE = |{ P_CONT } { GS_RETURN-MESSAGE } |.
+      WA_ERROR-SNO = GV_COUNT.
+      WA_ERROR-TYPE = '@01@'."'@08@'.
+      WA_ERROR-STATUS = LV_MESSAGE.
+      WA_ERROR-APP_LOG = GV_EXTNUMBER.
+      WA_ERROR-CONT_NUMBER = P_CONT.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          WAIT = GC_X
+* IMPORTING
+*         RETURN        =
+        .
+    ENDIF.
+    APPEND WA_ERROR TO IT_ERROR.
+
+
+
+
+    PERFORM F_BAL_LOG_CREATE.
+
+    PERFORM F_BAL_LOG_MSG_ADD USING GS_RETURN-TYPE
+                              GS_RETURN-ID
+                              GS_RETURN-NUMBER
+                              GS_RETURN-MESSAGE_V1
+                              GS_RETURN-MESSAGE_V2
+                              GS_RETURN-MESSAGE_V3
+                              GS_RETURN-MESSAGE_V4.
+    PERFORM F_BAL_DB_SAVE.
+    CLEAR : WA_ERROR, GS_RETURN.
+  ENDLOOP.
+
+
+  FREE : LS_CONTRACT, LS_CONTRACTX, LT_DATA, LT_DATAX .
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_BAL_LOG_CREATE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM F_BAL_LOG_CREATE .
+  DATA:
+    LS_LOG  TYPE BAL_S_LOG,
+    LS_PROT TYPE BALLOGHNDL.
+*
+
+  CLEAR: LS_LOG, LS_PROT, GT_PROT[].
+
+  LS_LOG-OBJECT    = GC_OBJECT.
+  LS_LOG-SUBOBJECT = GC_SUB_OBJECT.
+
+
+  LS_LOG-EXTNUMBER = GV_EXTNUMBER.
+
+
+*
+  CALL FUNCTION 'BAL_LOG_CREATE'
+    EXPORTING
+      I_S_LOG                 = LS_LOG
+    IMPORTING
+      E_LOG_HANDLE            = LS_PROT
+    EXCEPTIONS
+      LOG_HEADER_INCONSISTENT = 1
+      OTHERS                  = 2.
+  IF NOT SY-SUBRC IS INITIAL.
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ELSE.
+    APPEND LS_PROT TO GT_PROT.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_BAL_LOG_MSG_ADD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM F_BAL_LOG_MSG_ADD USING IMP_MSGTY
+                     IMP_MSGID
+                     IMP_MSGNO
+                     IMP_MSGV1
+                     IMP_MSGV2
+                     IMP_MSGV3
+                     IMP_MSGV4.
+
+  DATA:
+    LS_MESSAGE TYPE BAL_S_MSG,
+    LS_LOG     TYPE BALLOGHNDL.
+*
+* Checks
+  CHECK NOT IMP_MSGTY IS INITIAL AND
+        NOT IMP_MSGID IS INITIAL AND
+        NOT IMP_MSGNO IS INITIAL.
+*
+* move data
+  LS_MESSAGE-MSGTY = IMP_MSGTY.
+  LS_MESSAGE-MSGID = IMP_MSGID.
+  LS_MESSAGE-MSGNO = IMP_MSGNO.
+  LS_MESSAGE-MSGV1 = IMP_MSGV1.
+  LS_MESSAGE-MSGV2 = IMP_MSGV2.
+  LS_MESSAGE-MSGV3 = IMP_MSGV3.
+  LS_MESSAGE-MSGV4 = IMP_MSGV4.
+  READ TABLE GT_PROT INDEX 1 INTO LS_LOG.
+*
+  CALL FUNCTION 'BAL_LOG_MSG_ADD'
+    EXPORTING
+      I_LOG_HANDLE     = LS_LOG
+      I_S_MSG          = LS_MESSAGE
+    EXCEPTIONS
+      LOG_NOT_FOUND    = 1
+      MSG_INCONSISTENT = 2
+      LOG_IS_FULL      = 3
+      OTHERS           = 4.
+  IF SY-SUBRC <> 0.
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_BAL_DB_SAVE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM F_BAL_DB_SAVE .
+  CALL FUNCTION 'BAL_DB_SAVE'
+    EXPORTING
+      I_T_LOG_HANDLE   = GT_PROT
+    EXCEPTIONS
+      LOG_NOT_FOUND    = 1
+      SAVE_NOT_ALLOWED = 2
+      NUMBERING_ERROR  = 3
+      OTHERS           = 4.
+  IF NOT SY-SUBRC IS INITIAL.
+
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_DISPLAY_OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM F_DISPLAY_OUTPUT .
+
+  DATA: IT_FCAT   TYPE STANDARD TABLE OF SLIS_FIELDCAT_ALV,
+
+        LS_LAYOUT TYPE SLIS_LAYOUT_ALV,
+
+        WA_FCAT   TYPE LINE OF SLIS_T_FIELDCAT_ALV.
+
+
+  CLEAR LS_LAYOUT.
+
+  LS_LAYOUT-COLWIDTH_OPTIMIZE = GC_X.
+
+
+  WA_FCAT-FIELDNAME = 'SNO'.
+
+  WA_FCAT-SELTEXT_M = TEXT-001.
+
+  APPEND WA_FCAT TO IT_FCAT.
+
+  CLEAR WA_FCAT.
+
+
+  WA_FCAT-FIELDNAME = 'TYPE'.
+
+  WA_FCAT-SELTEXT_M = TEXT-003.
+
+  APPEND WA_FCAT TO IT_FCAT.
+
+  CLEAR WA_FCAT.
+
+  WA_FCAT-FIELDNAME = 'STATUS'.
+  WA_FCAT-ICON = GC_X.
+  WA_FCAT-SELTEXT_M = TEXT-002.
+
+  APPEND WA_FCAT TO IT_FCAT.
+
+  CLEAR WA_FCAT.
+
+  WA_FCAT-FIELDNAME = 'CONT_NUMBER'.
+*  WA_FCAT-ICON = GC_X.
+  WA_FCAT-HOTSPOT = GC_X.
+  WA_FCAT-SELTEXT_M = TEXT-005.
+
+  APPEND WA_FCAT TO IT_FCAT.
+
+  CLEAR WA_FCAT.
+
+  WA_FCAT-FIELDNAME = 'APP_LOG'.
+*  WA_FCAT-ICON = GC_X.
+  WA_FCAT-HOTSPOT = GC_X.
+  WA_FCAT-SELTEXT_M = TEXT-004.
+
+  APPEND WA_FCAT TO IT_FCAT.
+
+  CLEAR WA_FCAT.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_INTERFACE_CHECK       = ' '
+*     I_BYPASSING_BUFFER      = ' '
+*     I_BUFFER_ACTIVE         = ' '
+      I_CALLBACK_PROGRAM      = SY-REPID
+*     I_CALLBACK_PF_STATUS_SET          = ' '
+      I_CALLBACK_USER_COMMAND = 'USER_COMMAND'
+*     I_CALLBACK_TOP_OF_PAGE  = ' '
+*     I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*     I_CALLBACK_HTML_END_OF_LIST       = ' '
+*     I_STRUCTURE_NAME        =
+*     I_BACKGROUND_ID         = ' '
+*     I_GRID_TITLE            =
+*     I_GRID_SETTINGS         =
+      IS_LAYOUT               = LS_LAYOUT
+      IT_FIELDCAT             = IT_FCAT
+*     IT_EXCLUDING            =
+*     IT_SPECIAL_GROUPS       =
+*     IT_SORT                 =
+*     IT_FILTER               =
+*     IS_SEL_HIDE             =
+*     I_DEFAULT               = 'X'
+*     I_SAVE                  = ' '
+*     IS_VARIANT              =
+*     IT_EVENTS               =
+*     IT_EVENT_EXIT           =
+*     IS_PRINT                =
+*     IS_REPREP_ID            =
+*     I_SCREEN_START_COLUMN   = 0
+*     I_SCREEN_START_LINE     = 0
+*     I_SCREEN_END_COLUMN     = 0
+*     I_SCREEN_END_LINE       = 0
+*     I_HTML_HEIGHT_TOP       = 0
+*     I_HTML_HEIGHT_END       = 0
+*     IT_ALV_GRAPHICS         =
+*     IT_HYPERLINK            =
+*     IT_ADD_FIELDCAT         =
+*     IT_EXCEPT_QINFO         =
+*     IR_SALV_FULLSCREEN_ADAPTER        =
+*   IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER =
+*     ES_EXIT_CAUSED_BY_USER  =
+    TABLES
+      T_OUTTAB                = IT_ERROR
+    EXCEPTIONS
+      PROGRAM_ERROR           = 1
+      OTHERS                  = 2.
+
+  IF SY-SUBRC <> 0.
+
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+
+            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_FIELD_CAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM USER_COMMAND USING R_UCOMM LIKE SY-UCOMM
+                       RS_SELFIELD TYPE SLIS_SELFIELD.
+
+  DATA : GV_DATUM_FROM TYPE BALHDR-ALDATE,
+         LV_DATUM_TO   TYPE  BALHDR-ALDATE.
+
+  CASE R_UCOMM.
+
+    WHEN '&IC1'.
+      IF RS_SELFIELD-FIELDNAME EQ 'APP_LOG'.
+        READ TABLE IT_ERROR INTO DATA(GS_ERROR) INDEX RS_SELFIELD-TABINDEX.
+        IF SY-SUBRC EQ 0.
+*   IF sy-subrc = 0.
+*        CLEAR: LV_OBJ, LV_SUBOBJ, LV_EXTNUMBER.
+*        LV_OBJ       = GC_OBJ.
+*        LV_SUBOBJ    = GC_SUB_OBJ.
+*        LV_EXTNUMBER = GT_RES-APPLOG.
+          IF GV_EXTNUMBER IS NOT INITIAL.
+            GV_DATUM_FROM = SY-DATUM.
+            LV_DATUM_TO = SY-DATUM + 1.
+            CALL FUNCTION 'APPL_LOG_DISPLAY'
+              EXPORTING
+                OBJECT                    = GC_OBJECT
+                SUBOBJECT                 = GC_SUB_OBJECT
+                EXTERNAL_NUMBER           = GV_EXTNUMBER
+                DATE_FROM                 = GV_DATUM_FROM
+                TIME_FROM                 = '000000'
+                DATE_TO                   = LV_DATUM_TO
+                TIME_TO                   = '235959'
+                SUPPRESS_SELECTION_DIALOG = 'X'
+              EXCEPTIONS
+                NO_AUTHORITY              = 1
+                OTHERS                    = 2.
+            IF SY-SUBRC <> 0.
+*               Implement suitable error handling here
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF RS_SELFIELD-FIELDNAME EQ 'CONT_NUMBER'.
+
+        READ TABLE IT_ERROR INTO GS_ERROR INDEX RS_SELFIELD-TABINDEX.
+        IF SY-SUBRC EQ 0.
+          SET PARAMETER ID 'AUN' FIELD GS_ERROR-CONT_NUMBER.
+          CALL TRANSACTION 'VA43' AND SKIP FIRST SCREEN.
+
+        ENDIF.
+      ENDIF.
+  ENDCASE.
+
+ENDFORM.

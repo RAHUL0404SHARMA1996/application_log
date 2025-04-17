@@ -1,0 +1,10 @@
+  method CONSTRUCTOR.
+
+   P_CONT = IMP_CONT.   "contract Number
+   P_VKORG = IMP_VKORG.  "sales Org
+   P_VTWEG = IMP_VTWEG.  "Distribution channel
+   P_SPART = IMP_SPART.   " Divison
+   P_ST_DAT = IMP_ST_DAT.  "contract Start Date
+   P_EN_DAT = IMP_EN_DAT.  "Contract End Date
+
+  endmethod.

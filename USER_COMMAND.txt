@@ -1,0 +1,47 @@
+  METHOD USER_COMMAND.
+
+    DATA : GV_DATUM_FROM TYPE BALHDR-ALDATE,
+           LV_DATUM_TO   TYPE  BALHDR-ALDATE.
+
+    IF COLUMN EQ 'APP_LOG'.
+      DATA(GS_ERROR) = IT_ERROR[ ROW ].
+
+      IF GS_ERROR IS NOT INITIAL.
+
+        IF GV_EXTNUMBER IS NOT INITIAL.
+          GV_DATUM_FROM = SY-DATUM.
+          LV_DATUM_TO = SY-DATUM + 1.
+          CALL FUNCTION 'APPL_LOG_DISPLAY'
+            EXPORTING
+              OBJECT                    = ZCL_CONSTANT=>GC_OBJECT
+              SUBOBJECT                 = ZCL_CONSTANT=>GC_SUB_OBJECT
+              EXTERNAL_NUMBER           = GV_EXTNUMBER
+              DATE_FROM                 = GV_DATUM_FROM
+              TIME_FROM                 = ZCL_CONSTANT=>GC_TIME_FROM
+              DATE_TO                   = LV_DATUM_TO
+              TIME_TO                   = ZCL_CONSTANT=>GC_TIME_TO
+              SUPPRESS_SELECTION_DIALOG = ABAP_TRUE
+            EXCEPTIONS
+              NO_AUTHORITY              = 1
+              OTHERS                    = 2.
+          IF SY-SUBRC <> 0.
+            MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+                    WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF COLUMN EQ 'CONT_NUMBER'.
+      GS_ERROR = IT_ERROR[ ROW ].
+
+      IF GS_ERROR IS NOT INITIAL.
+
+        SET PARAMETER ID ZCL_CONSTANT=>GC_PARA_ID FIELD GS_ERROR-CONT_NUMBER.
+        CALL TRANSACTION ZCL_CONSTANT=>GC_TCODE WITHOUT AUTHORITY-CHECK AND SKIP FIRST SCREEN. "#EC CI_CALLTA
+        SET PARAMETER ID ZCL_CONSTANT=>GC_PARA_ID FIELD SPACE.
+      ENDIF.
+
+    ENDIF.
+
+  ENDMETHOD.

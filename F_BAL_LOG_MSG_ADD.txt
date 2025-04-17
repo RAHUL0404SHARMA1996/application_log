@@ -1,0 +1,31 @@
+  METHOD F_BAL_LOG_MSG_ADD.
+
+    DATA: LS_MESSAGE TYPE BAL_S_MSG.
+
+    CHECK NOT IMP_MSGTY IS INITIAL AND
+          NOT IMP_MSGID IS INITIAL AND
+          NOT IMP_MSGNO IS INITIAL.
+
+    LS_MESSAGE = VALUE #( MSGTY = IMP_MSGTY  MSGID = IMP_MSGID  MSGNO = IMP_MSGNO
+                          MSGV1 = IMP_MSGV1  MSGV2  = IMP_MSGV2 MSGV3 = IMP_MSGV3
+                          MSGV4 = IMP_MSGV4 ).
+
+    IF LINE_EXISTS( GT_PROT[ 1 ] ).
+      DATA(LS_LOG) = GT_PROT[ 1 ].
+
+      CALL FUNCTION 'BAL_LOG_MSG_ADD'
+        EXPORTING
+          I_LOG_HANDLE     = LS_LOG
+          I_S_MSG          = LS_MESSAGE
+        EXCEPTIONS
+          LOG_NOT_FOUND    = 1
+          MSG_INCONSISTENT = 2
+          LOG_IS_FULL      = 3
+          OTHERS           = 4.
+      IF SY-SUBRC <> 0.
+        MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+                WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+    ENDIF.
+
+  ENDMETHOD.

@@ -1,0 +1,83 @@
+  METHOD DISPLAY_DATA.
+
+    DATA : O_SALV   TYPE REF TO CL_SALV_TABLE,
+           O_EVENTS TYPE REF TO CL_SALV_EVENTS_TABLE.
+
+    "SALV TABLE
+    TRY.
+
+        CALL METHOD CL_SALV_TABLE=>FACTORY
+          IMPORTING
+            R_SALV_TABLE = O_SALV
+          CHANGING
+            T_TABLE      = IT_ERROR.
+
+      CATCH CX_SALV_MSG INTO EX_REF1.
+        MSG1 = EX_REF1->GET_TEXT( ).
+      CATCH CX_DYNAMIC_CHECK INTO EX_REF1.
+        MSG1 = EX_REF1->GET_TEXT( ).
+      CLEANUP.
+    ENDTRY.
+
+    TRY.
+        O_EVENTS = O_SALV->GET_EVENT( ).
+        SET HANDLER USER_COMMAND FOR O_EVENTS.
+
+        "sno. Column
+        DATA(O_COL) = CAST CL_SALV_COLUMN_TABLE( O_SALV->GET_COLUMNS( )->GET_COLUMN( 'SNO' ) ). " get Column from salv
+
+        O_COL->SET_ALIGNMENT( IF_SALV_C_ALIGNMENT=>CENTERED ).  "align into centered
+        O_COL->SET_LONG_TEXT( TEXT-001 ).             "set the text
+
+        "type column
+        O_COL = CAST CL_SALV_COLUMN_TABLE( O_SALV->GET_COLUMNS( )->GET_COLUMN( 'TYPE' ) ).   " get Column from salv
+        O_COL->SET_ICON( IF_SALV_C_BOOL_SAP=>TRUE ).           "set the icon for column TYPE
+        O_COL->SET_ALIGNMENT( IF_SALV_C_ALIGNMENT=>CENTERED ).   "align into centered
+        O_COL->SET_LONG_TEXT( TEXT-003 ).   "set the text
+        O_COL->SET_TOOLTIP( TEXT-007 ).     "when you hover at status column it will show text
+
+        TRY.
+            DATA(O_TOOLTIPS) = O_SALV->GET_FUNCTIONAL_SETTINGS( )->GET_TOOLTIPS( ).
+
+            O_TOOLTIPS->ADD_TOOLTIP( TYPE = CL_SALV_TOOLTIP=>C_TYPE_ICON
+                                     VALUE = |{ ICON_GREEN_LIGHT }|
+                                      TOOLTIP = TEXT-008 ).    " to show the text when you over at green light icon
+
+            O_TOOLTIPS->ADD_TOOLTIP( TYPE = CL_SALV_TOOLTIP=>C_TYPE_ICON
+                                   VALUE = |{ ICON_RED_LIGHT }|
+                                    TOOLTIP = TEXT-009 ).  " to show the text when you over at red light icon
+          CATCH CX_SALV_EXISTING INTO EX_REF1.  " TO RAISE TOOLTIPS EXCEPTION
+            MSG1 = EX_REF1->GET_TEXT( ).
+          CLEANUP.
+        ENDTRY.
+
+        "Status Line
+        O_COL = CAST CL_SALV_COLUMN_TABLE( O_SALV->GET_COLUMNS( )->GET_COLUMN( 'STATUS' ) ). " get Column from salv
+        O_COL->SET_ALIGNMENT( IF_SALV_C_ALIGNMENT=>CENTERED ).  "align into centered
+        O_COL->SET_LONG_TEXT( TEXT-006 ). "set the text
+
+        "contract Number
+        O_COL = CAST CL_SALV_COLUMN_TABLE( O_SALV->GET_COLUMNS( )->GET_COLUMN( 'CONT_NUMBER' ) ). " get Column from salv
+        O_COL->SET_ALIGNMENT( IF_SALV_C_ALIGNMENT=>CENTERED ). "align into centered
+        O_COL->SET_LONG_TEXT( TEXT-005 ). "set the text
+        O_COL->SET_CELL_TYPE( IF_SALV_C_CELL_TYPE=>HOTSPOT ). "for hotspot and link
+
+        "application log
+        O_COL = CAST CL_SALV_COLUMN_TABLE( O_SALV->GET_COLUMNS( )->GET_COLUMN( 'APP_LOG' ) ). " get Column from salv
+        O_COL->SET_ALIGNMENT( IF_SALV_C_ALIGNMENT=>CENTERED ). "align into centered
+        O_COL->SET_LONG_TEXT( TEXT-004 ).  "set the text
+        O_COL->SET_CELL_TYPE( IF_SALV_C_CELL_TYPE=>HOTSPOT ). "for hotspot and link
+
+      CATCH CX_SALV_NOT_FOUND INTO EX_REF1.   "TO HANDLE SALV COLUMN EXCEPTION
+        MSG1 = EX_REF1->GET_TEXT( ).
+      CATCH CX_DYNAMIC_CHECK INTO EX_REF1.
+        MSG1 = EX_REF1->GET_TEXT( ).
+      CLEANUP.
+
+    ENDTRY.
+
+    O_SALV->DISPLAY( ).          "to display ALV
+
+
+
+  ENDMETHOD.

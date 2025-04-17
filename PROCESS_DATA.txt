@@ -1,0 +1,98 @@
+  METHOD PROCESS_DATA.
+
+    DATA : LS_CONTRACT  TYPE BAPISDH1,
+           LS_CONTRACTX TYPE BAPISDH1X,
+           LS_DATA      TYPE BAPICTR,
+           LT_DATA      TYPE TABLE OF BAPICTR,
+           LS_DATAX     TYPE BAPICTRX,
+           LT_DATAX     TYPE TABLE OF BAPICTRX.
+
+
+    LS_CONTRACT = VALUE #( COLLECT_NO = P_CONT SALES_ORG = P_VKORG DISTR_CHAN = P_VTWEG
+                             DIVISION = P_SPART ).
+
+
+    LS_CONTRACTX = VALUE #( UPDATEFLAG = ZCL_CONSTANT=>GC_U
+                           COLLECT_NO = ABAP_TRUE
+                            SALES_ORG = ABAP_TRUE
+                           DISTR_CHAN = ABAP_TRUE
+                             DIVISION = ABAP_TRUE ).
+
+    LS_DATA = VALUE #(  ITM_NUMBER = ZCL_CONSTANT=>GC_ITEM
+                       CON_ST_DAT = P_ST_DAT
+                        CON_EN_DAT = P_EN_DAT  ).
+    APPEND LS_DATA TO LT_DATA.
+    CLEAR LS_DATA.
+
+
+    LS_DATAX = VALUE #(  ITM_NUMBER = ZCL_CONSTANT=>GC_ITEM
+                       CON_ST_DAT = ABAP_TRUE
+                        CON_EN_DAT = ABAP_TRUE  ).
+
+    APPEND LS_DATAX TO LT_DATAX.
+    CLEAR LS_DATAX.
+
+    CALL FUNCTION 'BAPI_CUSTOMERCONTRACT_CHANGE'
+      EXPORTING
+        SALESDOCUMENT       = P_CONT
+        CONTRACT_HEADER_IN  = LS_CONTRACT
+        CONTRACT_HEADER_INX = LS_CONTRACTX
+      TABLES
+        RETURN              = GT_RETURN
+        CONTRACT_DATA_IN    = LT_DATA
+        CONTRACT_DATA_INX   = LT_DATAX.
+
+
+
+    LOOP AT GT_RETURN INTO DATA(GS_RETURN).
+
+      GV_EXTNUMBER = |{ 'Cont_Upload' } { SY-DATUM } { '_' } { SY-UZEIT } { '_' } |.
+
+      IF GS_RETURN-TYPE CA ZCL_CONSTANT=>GC_EA.
+
+        ADD 1 TO GV_COUNT.
+        LV_MESSAGE = |{ P_CONT } { GS_RETURN-MESSAGE } |.
+
+        WA_ERROR = VALUE #(  SNO = GV_COUNT
+                             TYPE = ICON_RED_LIGHT"'@0A@'
+                             STATUS = LV_MESSAGE
+                             APP_LOG = GV_EXTNUMBER
+                              CONT_NUMBER = P_CONT  ).
+
+        CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+
+      ELSE.
+        ADD 1 TO GV_COUNT.
+        LV_MESSAGE = |{ P_CONT } { GS_RETURN-MESSAGE } |.
+        WA_ERROR = VALUE #(  SNO = GV_COUNT
+                           TYPE = ICON_GREEN_LIGHT"'@08@'
+                           STATUS = LV_MESSAGE
+                           APP_LOG = GV_EXTNUMBER
+                            CONT_NUMBER = P_CONT  ).
+        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+          EXPORTING
+            WAIT = ABAP_TRUE.
+
+      ENDIF.
+      APPEND WA_ERROR TO IT_ERROR.
+
+      F_BAL_LOG_CREATE( ).
+
+      CALL METHOD F_BAL_LOG_MSG_ADD
+        EXPORTING
+          IMP_MSGTY = GS_RETURN-TYPE
+          IMP_MSGID = GS_RETURN-ID
+          IMP_MSGNO = GS_RETURN-NUMBER
+          IMP_MSGV1 = GS_RETURN-MESSAGE_V1
+          IMP_MSGV2 = GS_RETURN-MESSAGE_V2
+          IMP_MSGV3 = GS_RETURN-MESSAGE_V3
+          IMP_MSGV4 = GS_RETURN-MESSAGE_V4.
+
+      F_BAL_DB_SAVE( ).
+      CLEAR : WA_ERROR, GS_RETURN.
+    ENDLOOP.
+
+
+    FREE : LS_CONTRACT, LS_CONTRACTX, LT_DATA, LT_DATAX .
+
+  ENDMETHOD.
